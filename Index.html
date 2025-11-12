@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Random Picker Wheel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --ink:#e5e7eb; --muted:#9ca3af; --line:#374151; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif; background: var(--bg); color: var(--ink); display: flex; flex-direction: column; align-items: center; padding: 20px; }
+    h1 { margin-bottom: 10px; font-weight: 600; }
+    .app { display: grid; grid-template-columns: 320px 340px 260px; gap: 20px; align-items: start; max-width: 1020px; width: 100%; }
+    .panel { background: var(--panel); border-radius: 16px; padding: 14px 14px 16px; box-shadow: 0 12px 30px rgba(0,0,0,0.45); border: 1px solid rgba(148,163,253,0.18); }
+    .panel h2 { margin: 0 0 8px; font-size: 15px; font-weight: 500; color: var(--muted); }
+    textarea { width: 100%; height: 180px; resize: vertical; background: #020817; color: var(--ink); border-radius: 10px; border: 1px solid var(--line); padding: 8px; font-size: 13px; }
+    input[type="text"] { width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: #020817; color: var(--ink); font-size: 13px; }
+    select { width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: #020817; color: var(--ink); font-size: 13px; }
+    .row { display: flex; gap: 6px; align-items: center; }
+    .col { display: grid; gap: 6px; }
+    .stack { display: grid; gap: 8px; }
+    button { border: none; padding: 7px 10px; border-radius: 999px; font-size: 12px; cursor: pointer; background: #4f46e5; color: var(--ink); transition: transform .12s ease, box-shadow .12s ease, background .12s; box-shadow: 0 6px 14px rgba(79,70,229,0.35); }
+    button:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(79,70,229,0.45); background: #6366f1; }
+    button.secondary { background: var(--panel); box-shadow: none; border: 1px solid var(--line); color: var(--muted); }
+    button.warn { background:#dc2626; box-shadow: 0 6px 14px rgba(220,38,38,0.35); }
+    .tiny { font-size: 10px; color: #6b7280; }
+    .wheel-wrapper { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .wheel-container { position: relative; width: 280px; height: 280px; }
+    .wheel { width: 100%; height: 100%; border-radius: 50%; border: 6px solid var(--panel); box-shadow: inset 0 0 15px rgba(0,0,0,0.6), 0 12px 30px rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; transition: transform 3s cubic-bezier(0.23, 1, 0.32, 1); position: relative; overflow: hidden; background: radial-gradient(circle at center, #111827 0, #111827 40%, #020817 100%); }
+    .wheel-labels { position: absolute; inset: 0; pointer-events: none; transform: translateZ(0); }
+    .label { position: absolute; top: 50%; left: 50%; font-size: 10px; color: var(--ink); text-shadow: 0 1px 2px rgba(0,0,0,0.9); white-space: nowrap; pointer-events: none; }
+    .pointer { position: absolute; top: -5px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 11px solid transparent; border-right: 11px solid transparent; border-bottom: 18px solid #f97316; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.7)); z-index: 10; }
+    .status { font-size: 12px; color: #9ca3af; min-height: 16px; }
+    .winner { font-size: 15px; font-weight: 600; color: #22c55e; min-height: 18px; }
+    .order-list { font-size: 12px; list-style: decimal; padding-left: 18px; margin: 6px 0 0; max-height: 240px; overflow-y: auto; }
+    .order-list li { margin: 2px 0; color: var(--ink); }
+    .chip { display: inline-block; padding: 2px 6px; border-radius: 999px; background: #020817; font-size: 10px; margin: 1px 2px 1px 0; border: 1px solid var(--line); color: var(--muted); }
+    .name-pills { margin-top: 4px; max-height: 70px; overflow-y: auto; }
+    @media (max-width: 980px) { .app { grid-template-columns: 1fr; } .wheel-container { width: 320px; height: 320px; } }
+    details summary { cursor: pointer; color: var(--muted); }
+    details textarea { height: 120px; }
+  </style>
+</head>
+<body>
+  <h1>Random Picker Wheel</h1>
+  <div class="app">
+    <!-- Left: Input & Lists -->
+    <div class="panel stack">
+      <div class="stack">
+        <h2>Names</h2>
+        <textarea id="namesInput" placeholder="Type one name per line..."></textarea>
+        <div class="row">
+          <input id="quickName" type="text" placeholder="Quick add name + Enter" />
+          <button id="addBtn">Add</button>
+        </div>
+        <div class="row">
+          <button id="buildBtn">Build Wheel</button>
+          <button id="resetBtn" class="secondary">Reset</button>
+        </div>
+        <div class="tiny">Tip: Paste a list → Build Wheel → Spin. Picked names are removed automatically.</div>
+      </div>
+
+      <div class="stack">
+        <h2>Save / Load Lists</h2>
+        <div class="col">
+          <div class="row">
+            <input id="listNameInput" type="text" placeholder="List name (e.g., Team A, Sales-Week1)" />
+            <button id="saveListBtn">Save</button>
+          </div>
+          <div class="row">
+            <select id="listSelect"></select>
+            <button id="loadListBtn" class="secondary">Load</button>
+            <button id="deleteListBtn" class="warn">Delete</button>
+          </div>
+          <div class="tiny" id="listsInfo"></div>
+        </div>
+
+        <details>
+          <summary>Export / Import (backup & transfer)</summary>
+          <div class="col" style="margin-top:8px;">
+            <button id="exportBtn">Export All Lists</button>
+            <textarea id="importArea" placeholder="Paste exported JSON here..."></textarea>
+            <div class="row">
+              <button id="importBtn">Import</button>
+              <button id="clearAllBtn" class="warn">Clear ALL Lists</button>
+            </div>
+            <div class="tiny">Export copies everything into text. Paste it back here on another computer and hit Import.</div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Middle: Wheel -->
+    <div class="panel">
+      <h2>Wheel</h2>
+      <div class="wheel-wrapper">
+        <div class="wheel-container">
+          <div class="pointer"></div>
+          <div id="wheel" class="wheel">
+            <div id="wheelLabels" class="wheel-labels"></div>
+          </div>
+        </div>
+        <button id="spinBtn">Spin 🎡</button>
+        <div class="winner" id="winnerText"></div>
+        <div class="status" id="statusText"></div>
+      </div>
+    </div>
+
+    <!-- Right: Order & remaining -->
+    <div class="panel">
+      <h2>Order & Remaining</h2>
+      <ol id="orderList" class="order-list"></ol>
+      <div class="name-pills" id="remainingNames"></div>
+      <div class="tiny" id="countInfo"></div>
+    </div>
+  </div>
+
+  <script>
+    // --- DOM
+    const namesInput = document.getElementById("namesInput");
+    const quickName = document.getElementById("quickName");
+    const addBtn = document.getElementById("addBtn");
+    const buildBtn = document.getElementById("buildBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const spinBtn = document.getElementById("spinBtn");
+    const wheelEl = document.getElementById("wheel");
+    const wheelLabelsEl = document.getElementById("wheelLabels");
+    const winnerText = document.getElementById("winnerText");
+    const statusText = document.getElementById("statusText");
+    const orderList = document.getElementById("orderList");
+    const remainingNamesEl = document.getElementById("remainingNames");
+    const countInfo = document.getElementById("countInfo");
+
+    // Lists UI
+    const listNameInput = document.getElementById("listNameInput");
+    const listSelect = document.getElementById("listSelect");
+    const saveListBtn = document.getElementById("saveListBtn");
+    const loadListBtn = document.getElementById("loadListBtn");
+    const deleteListBtn = document.getElementById("deleteListBtn");
+    const listsInfo = document.getElementById("listsInfo");
+    const exportBtn = document.getElementById("exportBtn");
+    const importArea = document.getElementById("importArea");
+    const importBtn = document.getElementById("importBtn");
+    const clearAllBtn = document.getElementById("clearAllBtn");
+
+    // --- State
+    let pool = [];
+    let order = [];
+    let spinning = false;
+    let currentRotation = 0;
+
+    // --- LocalStorage helpers
+    const LS_KEY = "picker_lists_v1";
+    const LS_LAST = "picker_last_list_v1";
+
+    function getAllLists() {
+      try {
+        return JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+      } catch { return {}; }
+    }
+    function saveAllLists(obj) {
+      localStorage.setItem(LS_KEY, JSON.stringify(obj));
+      refreshListDropdown();
+    }
+    function upsertList(name, arr) {
+      const lists = getAllLists();
+      lists[name] = [...new Set(arr.map(s => s.trim()).filter(Boolean))];
+      saveAllLists(lists);
+      localStorage.setItem(LS_LAST, name);
+      refreshListDropdown(name);
+      flashListsInfo(`Saved "${name}" (${lists[name].length} names).`);
+    }
+    function deleteList(name) {
+      const lists = getAllLists();
+      delete lists[name];
+      saveAllLists(lists);
+      const last = localStorage.getItem(LS_LAST);
+      if (last === name) localStorage.removeItem(LS_LAST);
+      refreshListDropdown();
+      flashListsInfo(`Deleted "${name}".`);
+    }
+
+    function refreshListDropdown(selectName) {
+      const lists = getAllLists();
+      const names = Object.keys(lists).sort((a,b)=>a.localeCompare(b));
+      listSelect.innerHTML = "";
+      if (names.length === 0) {
+        const opt = document.createElement("option");
+        opt.value = ""; opt.textContent = "— no saved lists —";
+        listSelect.appendChild(opt);
+        listsInfo.textContent = "No saved lists yet.";
+        return;
+      }
+      names.forEach(n => {
+        const opt = document.createElement("option");
+        opt.value = n; opt.textContent = n;
+        listSelect.appendChild(opt);
+      });
+      const preferred = selectName || localStorage.getItem(LS_LAST) || names[0];
+      listSelect.value = preferred;
+      const count = lists[preferred]?.length ?? 0;
+      listsInfo.textContent = `${names.length} saved list(s). Selected "${preferred}" (${count} names).`;
+    }
+
+    function flashListsInfo(text) {
+      listsInfo.textContent = text;
+      listsInfo.style.opacity = "1";
+      setTimeout(()=>listsInfo.style.opacity="0.8", 1600);
+    }
+
+    // --- Core
+    function parseNamesFromTextarea() {
+      return namesInput.value
+        .split("\n")
+        .map(n => n.trim())
+        .filter(n => n.length > 0);
+    }
+    function syncTextareaFromPool() {
+      namesInput.value = pool.join("\n");
+    }
+
+    function buildWheel() {
+      pool = [...new Set(parseNamesFromTextarea())];
+      order = [];
+      orderList.innerHTML = "";
+      winnerText.textContent = "";
+      statusText.textContent = "";
+
+      if (pool.length === 0) {
+        statusText.textContent = "Add some names first.";
+        renderWheelVisual([]);
+        renderRemaining();
+        return;
+      }
+      renderWheelVisual(pool);
+      renderRemaining();
+      statusText.textContent = `Wheel ready with ${pool.length} names.`;
+    }
+
+    function renderWheelVisual(names) {
+      wheelLabelsEl.innerHTML = "";
+      if (names.length === 0) {
+        wheelEl.style.background = "#020817";
+        return;
+      }
+      const sliceAngle = 360 / names.length;
+      const colors = ["#4f46e5", "#22c55e", "#ec4899", "#f97316", "#06b6d4", "#a855f7"];
+      const gradientParts = names.map((_, i) => {
+        const start = i * sliceAngle, end = (i + 1) * sliceAngle;
+        return `${colors[i % colors.length]} ${start}deg ${end}deg`;
+      });
+      wheelEl.style.background = `conic-gradient(${gradientParts.join(",")})`;
+
+      const rect = wheelEl.getBoundingClientRect();
+      const radius = rect.width / 2 - 28;
+
+      names.forEach((name, i) => {
+        const angle = i * sliceAngle + sliceAngle / 2;
+        const label = document.createElement("div");
+        label.className = "label";
+        label.textContent = name.length > 18 ? name.slice(0, 16) + "…" : name;
+        label.style.transform =
+          `translate(-50%, -50%) rotate(${angle}deg) translate(0, -${radius}px) rotate(${-angle}deg)`;
+        wheelLabelsEl.appendChild(label);
+      });
+    }
+
+    function renderRemaining() {
+      remainingNamesEl.innerHTML = "";
+      pool.forEach(name => {
+        const div = document.createElement("div");
+        div.className = "chip";
+        div.textContent = name;
+        remainingNamesEl.appendChild(div);
+      });
+      countInfo.textContent = pool.length > 0 ? `${pool.length} remaining` : "";
+    }
+
+    function addToOrderList(name) {
+      const li = document.createElement("li");
+      li.textContent = name;
+      orderList.appendChild(li);
+    }
+
+    function spin() {
+      if (spinning) return;
+      if (pool.length === 0) {
+        statusText.textContent = "No names left to pick.";
+        return;
+      }
+      spinning = true;
+      winnerText.textContent = "";
+      statusText.textContent = "Spinning...";
+
+      const index = Math.floor(Math.random() * pool.length);
+      const winner = pool[index];
+
+      const extraRotations = 360 * 5;
+      const randomOffset = Math.floor(Math.random() * 360);
+      currentRotation += extraRotations + randomOffset;
+      wheelEl.style.transform = `rotate(${currentRotation}deg)`;
+
+      const onDone = () => {
+        wheelEl.removeEventListener("transitionend", onDone);
+        winnerText.textContent = winner;
+        statusText.textContent = `${winner} selected. Removed from wheel.`;
+        order.push(winner);
+        pool.splice(index, 1);
+        addToOrderList(winner);
+        renderWheelVisual(pool);
+        renderRemaining();
+        syncTextareaFromPool();
+        if (pool.length === 0) statusText.textContent = "All names picked. You have your full order.";
+        spinning = false;
+      };
+
+      let safety = setTimeout(()=>{ if (spinning) onDone(); }, 3300);
+      wheelEl.addEventListener("transitionend", ()=>{ clearTimeout(safety); onDone(); }, { once: true });
+    }
+
+    function resetAll() {
+      pool = [];
+      order = [];
+      namesInput.value = "";
+      orderList.innerHTML = "";
+      winnerText.textContent = "";
+      statusText.textContent = "Reset. Add names and build the wheel.";
+      wheelEl.style.transform = "rotate(0deg)";
+      currentRotation = 0;
+      renderWheelVisual([]);
+      renderRemaining();
+      countInfo.textContent = "";
+    }
+
+    // --- List actions
+    function saveCurrentAsList() {
+      const name = (listNameInput.value || "").trim();
+      if (!name) { alert("Give your list a name first."); return; }
+      const arr = parseNamesFromTextarea();
+      if (arr.length === 0) { alert("Nothing to save — add some names."); return; }
+      if (!confirm(`Save/overwrite list "${name}" with ${arr.length} names?`)) return;
+      upsertList(name, arr);
+    }
+    function loadSelectedList() {
+      const name = listSelect.value;
+      const lists = getAllLists();
+      const arr = lists[name];
+      if (!arr) { alert("No such list."); return; }
+      namesInput.value = arr.join("\n");
+      localStorage.setItem(LS_LAST, name);
+      buildWheel();
+      flashListsInfo(`Loaded "${name}" (${arr.length} names).`);
+    }
+    function deleteSelectedList() {
+      const name = listSelect.value;
+      if (!name) return;
+      if (!confirm(`Delete list "${name}"? This cannot be undone.`)) return;
+      deleteList(name);
+    }
+
+    // Export / Import / Clear
+    function exportAll() {
+      const data = getAllLists();
+      const json = JSON.stringify(data, null, 2);
+      // Put into textarea and also download a file
+      importArea.value = json;
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "picker-lists-backup.json";
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      flashListsInfo("Exported all lists.");
+    }
+    function importAll() {
+      const text = importArea.value.trim();
+      if (!text) { alert("Paste exported JSON first."); return; }
+      try {
+        const obj = JSON.parse(text);
+        if (typeof obj !== "object" || Array.isArray(obj)) throw new Error("Bad format");
+        // Merge (not replace) to be safe; later entries overwrite same-named lists
+        const current = getAllLists();
+        const merged = { ...current };
+        Object.keys(obj).forEach(name => {
+          const arr = obj[name];
+          if (Array.isArray(arr)) merged[name] = [...new Set(arr.map(s=>String(s).trim()).filter(Boolean))];
+        });
+        saveAllLists(merged);
+        flashListsInfo("Imported lists.");
+      } catch (e) {
+        alert("Invalid JSON. Make sure you pasted the exported text correctly.");
+      }
+    }
+    function clearAllLists() {
+      if (!confirm("Clear ALL saved lists? This will remove everything.")) return;
+      localStorage.removeItem(LS_KEY);
+      localStorage.removeItem(LS_LAST);
+      refreshListDropdown();
+      flashListsInfo("Cleared all lists.");
+    }
+
+    // --- Events
+    buildBtn.addEventListener("click", buildWheel);
+    resetBtn.addEventListener("click", resetAll);
+    spinBtn.addEventListener("click", spin);
+
+    addBtn.addEventListener("click", () => {
+      const val = quickName.value.trim();
+      if (!val) return;
+      const current = parseNamesFromTextarea();
+      current.push(val);
+      namesInput.value = current.join("\n");
+      quickName.value = "";
+      buildWheel();
+    });
+    quickName.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); addBtn.click(); }
+    });
+
+    saveListBtn.addEventListener("click", saveCurrentAsList);
+    loadListBtn.addEventListener("click", loadSelectedList);
+    deleteListBtn.addEventListener("click", deleteSelectedList);
+    exportBtn.addEventListener("click", exportAll);
+    importBtn.addEventListener("click", importAll);
+    clearAllBtn.addEventListener("click", clearAllLists);
+
+    // --- Init
+    refreshListDropdown();
+    statusText.textContent = "Add names to begin.";
+
+    // If there was a last-used list, preload it (nice QoL)
+    const last = localStorage.getItem(LS_LAST);
+    if (last) {
+      const lists = getAllLists();
+      if (lists[last]?.length) {
+        listSelect.value = last;
+        namesInput.value = lists[last].join("\n");
+        buildWheel();
+        flashListsInfo(`Auto-loaded "${last}".`);
+      }
+    }
+  </script>
+</body>
+</html>
